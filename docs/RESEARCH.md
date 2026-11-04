@@ -86,6 +86,18 @@ OrcaSlicer הוא AGPL-3.0 ומורץ כתהליך נפרד, בלי קישור �
 | מחשב Windows קיים | Docker Desktop. עובד רק כשהמחשב דלוק |
 | בלי מכשיר ביתי (Plan B) | חיתוך בשרת ענן (VPS), תקשורת עם המדפסת רק כשהטלפון בבית. לא מומלץ |
 
+## 7. פרויקטים קיימים בגיטהב (נבדק 2026-11)
+
+| פרויקט | רישיון | מה יש | חסר לנו |
+|---|---|---|---|
+| **[Bambuddy](https://github.com/maziggy/bambuddy)** (כ-3.3k ⭐, פעיל מאוד) | AGPL-3.0 | תומך ב-A1, ‏Docker amd64/arm64 (גם Pi 4/5), ‏PWA למובייל, slicing בצד השרת (Bambu Studio/Orca CLI ב-sidecar), צפייה ב-Three.js, תצוגת G-code עם libvgcode, מצלמה חיה, תור הדפסות, ניהול סלילים ו-Spoolman, ‏Proxy Mode עם Tailscale | עברית/RTL, ‏APK עם "פתח באמצעות", עורך מתקדם (Cut/Split) |
+| [PrintStream](https://github.com/PrintStreamApp/printstream) | PolyForm Noncommercial (מקור פתוח לצפייה, לא קוד פתוח מלא) | PWA, ‏slicing בשרת, עורך 3D, ‏bridge | דורש מפתח קהילה; פחות גמיש לשינויים |
+| [bambu-gateway](https://github.com/leolobato/bambu-gateway) | — | REST ו-web פשוט, ‏slicing עם orcaslicer-headless | בסיסי |
+| [platecli](https://github.com/DLANSAMA/bambu-local-cli) | — | CLI: ‏Orca ושליחה ב-LAN | אין UI |
+
+**מסקנה מרכזית:** כל הפרויקטים האלה דורשים **LAN Only + Developer Mode** כדי להתחיל הדפסה, וכולם מתארים את מצב LAN הרגיל כ"קריאה בלבד". זה מאשר את המגבלה מסעיף 1: אף אחד לא פתר "גם Handy וגם שליטה מלאה" בדרך מותרת.
+**המלצה:** לא לבנות מאפס. מתקינים את Bambuddy על ה-Gateway ובודקים אותו מול ה-A1, ואחר כך עושים fork ומוסיפים את מה שחסר.
+
 ## מקורות
 - https://forum.bambulab.com/t/updates-and-third-party-integration-with-bambu-connect/137408
 - https://github.com/schwarztim/bambu-mcp
