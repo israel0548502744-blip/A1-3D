@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bambu Control</string>
+    <string name="setup_title">חיבור לשרת הבית</string>
+    <string name="setup_body">הכנס את הכתובת של Bambuddy במחשב הלינוקס בבית.\nבבית: הכתובת המקומית, למשל 192.168.1.50:8000\nמכל מקום: שם המחשב ב-Tailscale, למשל bambu-pc:8000</string>
+    <string name="setup_hint">bambu-pc:8000</string>
+    <string name="setup_connect">בדוק והתחבר</string>
+    <string name="setup_checking">בודק חיבור לשרת…</string>
+    <string name="setup_invalid">הכתובת לא תקינה</string>
+    <string name="setup_failed">אין חיבור לשרת (%1$s).\nבדוק שהמחשב דלוק, ש-Bambuddy רץ, ושה-Tailscale מחובר בטלפון.</string>
+    <string name="error_title">השרת לא זמין</string>
+    <string name="error_detail">לא הצלחתי להתחבר ל-%1$s\n%2$s</string>
+    <string name="retry">נסה שוב</string>
+    <string name="change_server">שנה כתובת שרת</string>
+    <string name="download_started">מוריד: %1$s</string>
+    <string name="download_unsupported">ההורדה הזו לא נתמכת באפליקציה</string>
+    <string name="shortcut_change_server">שינוי כתובת שרת</string>
+</resources>
