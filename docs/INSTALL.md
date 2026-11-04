@@ -1,18 +1,40 @@
-# התקנת Bambuddy על מחשב לינוקס ביתי
+# התקנת Bambuddy על המחשב הביתי
 
 > המדריך מבוסס על ה-README של Bambuddy (נבדק ב-2026-11). אם פקודה כאן לא תואמת את המצב הנוכחי, הגרסה הקובעת היא https://github.com/maziggy/bambuddy.
 
+המחשב שדלוק תמיד בבית הוא השרת. אין צורך במחשב נוסף, ב-Raspberry Pi או בלינוקס.
+
 ## 0. מה צריך
-- מחשב עם Ubuntu 24.04 (או דומה), מחובר בכבל או ב-Wi-Fi לאותה רשת של המדפסת, ודלוק כל הזמן.
+- המחשב הביתי שדלוק תמיד (Windows או לינוקס), מחובר לאותה רשת של המדפסת.
 - ה-A1 מחובר ל-Wi-Fi הביתי.
 
-## 1. התקנת Docker
+---
+
+## מסלול א': Windows (מומלץ, המחשב שלך)
+
+### 1. התקנת Bambuddy
+יש ל-Bambuddy מתקין ל-Windows (קובץ `.exe`) שמתקין אותו כשירות שרץ ברקע, גם כשאף חלון לא פתוח.
+1. נכנסים ל-https://github.com/maziggy/bambuddy/releases.
+2. מורידים את המתקין של Windows מהגרסה האחרונה (קובץ `.exe`).
+3. מריצים אותו ומאשרים את בקרת המשתמש (UAC).
+4. פותחים בדפדפן: `http://localhost:8000`.
+⚠️ אם בגרסה הנוכחית אין מתקין Windows, משתמשים ב-Docker Desktop לפי מסלול ב', או אומר לי ואבדוק חלופה.
+
+### 2. מנוע החיתוך (OrcaSlicer)
+את החלק הזה נגדיר יחד תוך כדי. הוא מצריך את ה-"slicer sidecar" של Bambuddy, וב-Windows לרוב מתקינים אותו דרך Docker Desktop. נחליט לפי מה שרואים במסך.
+אחרי זה דלג לסעיף **4. הגדרת המדפסת**.
+
+---
+
+## מסלול ב': לינוקס (Docker)
+
+### 1. התקנת Docker
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER   # אחרי זה צריך להתנתק ולהתחבר מחדש
 ```
 
-## 2. התקנת Bambuddy
+### 2. התקנת Bambuddy
 ```bash
 mkdir ~/bambuddy && cd ~/bambuddy
 curl -O https://raw.githubusercontent.com/maziggy/bambuddy/main/docker-compose.yml
@@ -36,6 +58,8 @@ docker compose up -d
 ב-Bambuddy: ‏Add Printer ← סריקת רשת או הזנה ידנית של IP, Serial ו-Access Code.
 
 ## 5. גישה מכל מקום עם Tailscale
+- **Windows:** מורידים את Tailscale מ-https://tailscale.com/download/windows, מתקינים ומתחברים עם חשבון (Google למשל).
+- **לינוקס:**
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up
