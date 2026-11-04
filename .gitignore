@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+*.pyc
+.env
+/data/
+*.keystore
+android/app/build/
+.gradle/
