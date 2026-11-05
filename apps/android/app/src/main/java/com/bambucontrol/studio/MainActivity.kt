@@ -1,22 +1,20 @@
 package com.bambucontrol.studio
 
 import android.annotation.SuppressLint
-import android.app.DownloadManager
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.view.View
-import android.webkit.CookieManager
-import android.webkit.URLUtil
+import android.provider.MediaStore
+import android.util.Base64
+import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.Button
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -24,16 +22,17 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.webkit.WebViewAssetLoader
+import androidx.webkit.WebViewClientCompat
+import java.io.OutputStream
 
 /**
- * Shows the home Bambuddy web UI full-screen. The app itself holds no printer
- * credentials: everything (slicing, printer control) happens on the server.
+ * Runs the Bambu Control web app bundled inside the APK (assets/www), served
+ * over a virtual https origin so fetch() and WebAssembly work. No server.
  */
 class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var errorView: View
-    private var serverUrl: String = ""
     private var pendingFileCallback: ValueCallback<Array<Uri>>? = null
 
     private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
@@ -48,18 +47,12 @@ class MainActivity : ComponentActivity() {
         pendingFileCallback = null
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val saved = ServerConfig.get(this)
-        if (saved == null || intent?.action == ACTION_CHANGE_SERVER) {
-            startActivity(Intent(this, SetupActivity::class.java))
-            if (saved == null) { finish(); return }
-        }
-        serverUrl = saved
-
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        val root = findViewById<View>(R.id.root)
+        val root = findViewById<android.view.View>(R.id.root)
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
             v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -67,68 +60,30 @@ class MainActivity : ComponentActivity() {
         }
 
         webView = findViewById(R.id.webview)
-        errorView = findViewById(R.id.error_view)
-        findViewById<Button>(R.id.retry_button).setOnClickListener { reload() }
-        findViewById<Button>(R.id.change_server_button).setOnClickListener {
-            startActivity(Intent(this, SetupActivity::class.java))
-        }
 
-        setupWebView()
-        if (savedInstanceState != null) webView.restoreState(savedInstanceState) else webView.loadUrl(serverUrl)
+        val assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.canGoBack()) webView.goBack() else finish()
-            }
-        })
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // The address may have been changed in SetupActivity.
-        val current = ServerConfig.get(this)
-        if (::webView.isInitialized && current != null && current != serverUrl) {
-            serverUrl = current
-            reload()
-        }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        if (::webView.isInitialized) webView.saveState(outState)
-    }
-
-    private fun reload() {
-        errorView.visibility = View.GONE
-        webView.visibility = View.VISIBLE
-        webView.loadUrl(serverUrl)
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
         with(webView.settings) {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            builtInZoomControls = false
+            allowFileAccess = false
+            allowContentAccess = false
         }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
+        webView.addJavascriptInterface(SaveBridge(), "AndroidBridge")
 
-        webView.webViewClient = object : WebViewClient() {
+        webView.webViewClient = object : WebViewClientCompat() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                assetLoader.shouldInterceptRequest(request.url)
+
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url
-                val serverHost = Uri.parse(serverUrl).host
-                // Stay inside the app for the home server; open anything else in the browser.
-                if (url.host == serverHost) return false
+                if (url.host == "appassets.androidplatform.net") return false
                 startActivity(Intent(Intent.ACTION_VIEW, url))
                 return true
-            }
-
-            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
-                if (request.isForMainFrame) showError(error.description?.toString() ?: "")
             }
         }
 
@@ -140,7 +95,6 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 pendingFileCallback?.onReceiveValue(null)
                 pendingFileCallback = callback
-                // STL/3MF/STEP have no reliable MIME types on Android, so allow any file.
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
@@ -154,32 +108,54 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        webView.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
-            if (!url.startsWith("http")) {
-                Toast.makeText(this, R.string.download_unsupported, Toast.LENGTH_LONG).show()
-                return@setDownloadListener
-            }
-            val name = URLUtil.guessFileName(url, contentDisposition, mimeType)
-            val req = DownloadManager.Request(Uri.parse(url)).apply {
-                setMimeType(mimeType)
-                addRequestHeader("User-Agent", userAgent)
-                CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
-                setTitle(name)
-                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
-            }
-            (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-            Toast.makeText(this, getString(R.string.download_started, name), Toast.LENGTH_SHORT).show()
+        if (savedInstanceState != null) {
+            webView.restoreState(savedInstanceState)
+        } else {
+            webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
         }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else finish()
+            }
+        })
     }
 
-    private fun showError(detail: String) {
-        webView.visibility = View.GONE
-        errorView.visibility = View.VISIBLE
-        findViewById<TextView>(R.id.error_detail).text = getString(R.string.error_detail, serverUrl, detail)
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
     }
 
-    companion object {
-        const val ACTION_CHANGE_SERVER = "com.bambucontrol.studio.CHANGE_SERVER"
+    /** Lets the web app hand a generated file (e.g. exported STL) to Android to save. */
+    inner class SaveBridge {
+        @JavascriptInterface
+        fun saveBase64(fileName: String, base64: String, mime: String) {
+            try {
+                val bytes = Base64.decode(base64, Base64.DEFAULT)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                        put(MediaStore.Downloads.MIME_TYPE, mime)
+                        put(MediaStore.Downloads.IS_PENDING, 1)
+                    }
+                    val resolver = contentResolver
+                    val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    if (uri != null) {
+                        resolver.openOutputStream(uri)?.use { it.write(bytes) }
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        resolver.update(uri, values, null, null)
+                    }
+                } else {
+                    @Suppress("DEPRECATION")
+                    val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val out: OutputStream = java.io.FileOutputStream(java.io.File(dir, fileName))
+                    out.use { it.write(bytes) }
+                }
+                runOnUiThread { Toast.makeText(this@MainActivity, "נשמר: $fileName", Toast.LENGTH_SHORT).show() }
+            } catch (e: Exception) {
+                runOnUiThread { Toast.makeText(this@MainActivity, "שמירה נכשלה", Toast.LENGTH_LONG).show() }
+            }
+        }
     }
 }

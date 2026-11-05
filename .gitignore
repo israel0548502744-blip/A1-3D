@@ -10,3 +10,4 @@ __pycache__/
 android/app/build/
 .gradle/
 *.tsbuildinfo
+apps/android/app/src/main/assets/www/

@@ -106,13 +106,22 @@ export function App() {
     }
   }
 
-  function exportStl() {
+  async function exportStl() {
     const blob = viewerRef.current?.exportSTL();
     if (!blob) return;
+    const name = (sel?.name ?? "scene") + ".stl";
+    // Inside the Android APK there is no browser download; hand bytes to native.
+    const bridge = (window as unknown as {
+      AndroidBridge?: { saveBase64: (n: string, b: string, m: string) => void };
+    }).AndroidBridge;
+    if (bridge?.saveBase64) {
+      bridge.saveBase64(name, await blobToBase64(blob), "model/stl");
+      return;
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = (sel?.name ?? "scene") + ".stl";
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -393,6 +402,18 @@ export function App() {
       )}
     </div>
   );
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => {
+      const s = String(r.result);
+      resolve(s.slice(s.indexOf(",") + 1));
+    };
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
 }
 
 function Stat({ label, value, unit }: { label: string; value: string; unit?: string }) {

@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "apps/android/**"
+      - "apps/web/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
 
@@ -13,11 +14,25 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/android
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Build the web app and bundle it into the APK (assets/www) — no server.
+      - name: Build web app
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Bundle web app into the APK
+        run: |
+          rm -rf apps/android/app/src/main/assets/www
+          mkdir -p apps/android/app/src/main/assets/www
+          cp -r apps/web/dist/* apps/android/app/src/main/assets/www/
 
       - uses: actions/setup-java@v4
         with:
@@ -40,6 +55,7 @@ jobs:
           fi
 
       - name: Build release APK
+        working-directory: apps/android
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
@@ -47,6 +63,7 @@ jobs:
         run: gradle --no-daemon assembleRelease
 
       - name: Rename APK
+        working-directory: apps/android
         run: cp app/build/outputs/apk/release/app-release.apk "BambuControl-${{ github.run_number }}.apk"
 
       - uses: actions/upload-artifact@v4
@@ -63,5 +80,6 @@ jobs:
           prerelease: true
           files: apps/android/BambuControl-${{ github.run_number }}.apk
           body: |
-            להתקנה: פותחים את הקישור בטלפון, מורידים את קובץ ה-APK ומאשרים "התקנה ממקורות לא ידועים".
+            אפליקציה עצמאית: העורך והסלייסר רצים בתוך האפליקציה, בלי שרת.
+            להתקנה: פותחים את הקישור בטלפון, מורידים את ה-APK ומאשרים "התקנה ממקורות לא ידועים".
             מקור: ענף ${{ github.ref_name }}, commit ${{ github.sha }}
