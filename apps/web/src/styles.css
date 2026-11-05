@@ -137,6 +137,28 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; }
 }
 .toast button { background: transparent; border: none; color: #fff; font-size: 16px; }
 
+/* Slice preview overlay */
+.overlay {
+  position: fixed; inset: 0; z-index: 20; background: var(--bg);
+  display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.overlay-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.overlay-head b { font-size: 16px; }
+.overlay-body { overflow-y: auto; padding: 16px; }
+.slice-canvas {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius);
+  border: 1px solid var(--border); display: block; background: var(--surface-2);
+}
+.legend { display: flex; gap: 16px; justify-content: center; margin: 12px 0 4px; flex-wrap: wrap; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.btn.active { border-color: var(--accent); color: var(--accent); }
+.note { font-size: 12px; color: var(--muted); line-height: 1.55; margin: 16px 0 24px; }
+
 .loading-pill {
   position: fixed; z-index: 10; inset-inline: 0; top: 50%; margin: auto; width: max-content;
   background: var(--surface); border: 1px solid var(--border); color: var(--text);

@@ -500,6 +500,20 @@ export class Viewer {
     this.onChange(infos);
   }
 
+  /** World-space triangle positions (non-indexed) of one model, for slicing. */
+  worldPositions(id: string): Float32Array | null {
+    const e = this.entries.find((v) => v.id === id);
+    if (!e) return null;
+    e.mesh.updateMatrixWorld(true);
+    const g = e.mesh.geometry.clone();
+    g.applyMatrix4(e.mesh.matrixWorld);
+    const ni = g.index ? g.toNonIndexed() : g;
+    const arr = new Float32Array(ni.getAttribute("position").array);
+    g.dispose();
+    if (ni !== g) ni.dispose();
+    return arr;
+  }
+
   /** Test/debug helper: world-space size of each model, in mm. */
   debugBounds(): { id: string; name: string; size: [number, number, number] }[] {
     return this.entries.map((e) => {

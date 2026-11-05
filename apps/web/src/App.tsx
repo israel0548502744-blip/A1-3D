@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { Viewer, BED } from "./three/viewer";
 import { useStore, selectedModel } from "./store";
 import { t } from "./i18n";
+import { runSlicer, type SliceResult } from "./slicer/pipeline";
+import { A1_DEFAULTS, type MachineSettings } from "./slicer/estimate";
+import { SlicePreview } from "./SlicePreview";
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -12,6 +15,12 @@ export function App() {
   const sel = useStore(selectedModel);
   const [lock, setLock] = useState(true);
   const [cutting, setCutting] = useState(false);
+  const slicePos = useRef<Float32Array | null>(null);
+  const [sliceResult, setSliceResult] = useState<SliceResult | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [sliceSettings, setSliceSettings] = useState<MachineSettings>(A1_DEFAULTS);
+  const [layer, setLayer] = useState(0);
+  const [slicing, setSlicing] = useState(false);
 
   // Create the viewer once.
   useEffect(() => {
@@ -66,6 +75,34 @@ export function App() {
       setError(msg);
     } finally {
       setCutting(false);
+    }
+  }
+
+  async function runSlice(settings: MachineSettings, usePos: Float32Array | null) {
+    if (!sel || !viewerRef.current) return;
+    const pos = usePos ?? viewerRef.current.worldPositions(sel.id);
+    if (!pos || pos.length === 0) {
+      setError(t.sliceErr);
+      return;
+    }
+    slicePos.current = pos;
+    setSlicing(true);
+    setError(null);
+    await new Promise((r) => setTimeout(r, 20)); // let the spinner paint
+    try {
+      const res = runSlicer(pos, settings);
+      if (res.layers.length === 0) {
+        setError(t.sliceErr);
+      } else {
+        setSliceResult(res);
+        setLayer(Math.floor(res.layers.length / 2));
+        setPreviewOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(t.sliceErr);
+    } finally {
+      setSlicing(false);
     }
   }
 
@@ -314,17 +351,18 @@ export function App() {
                   </div>
 
                   <div className="section">
-                    <h3>{t.slice}</h3>
-                    <button className="btn block" onClick={exportStl}>
+                    <h3>{t.slicePreview}</h3>
+                    <button
+                      className="btn block"
+                      disabled={slicing}
+                      onClick={() => runSlice(sliceSettings, null)}
+                    >
+                      {slicing ? t.slicing : `✂ ${t.sliceRun}`}{" "}
+                      <span className="tag" style={{ marginInlineStart: 6 }}>{t.sliceExperimental}</span>
+                    </button>
+                    <button className="btn ghost block" style={{ marginTop: 8 }} onClick={exportStl}>
                       ⬇ {t.exportStl}
                     </button>
-                    <div className="soon" style={{ marginTop: 12 }}>
-                      <span style={{ fontSize: 13, color: "var(--muted)" }}>{t.slice}</span>
-                      <span className="tag">{t.notYet}</span>
-                    </div>
-                    <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, margin: "8px 0 0" }}>
-                      {t.sliceSoon}
-                    </p>
                   </div>
                 </>
               )}
@@ -332,6 +370,19 @@ export function App() {
           )}
         </div>
       </div>
+
+      {previewOpen && sliceResult && (
+        <SlicePreview
+          result={sliceResult}
+          layer={layer}
+          setLayer={setLayer}
+          settings={sliceSettings}
+          setSettings={setSliceSettings}
+          onUpdate={() => runSlice(sliceSettings, slicePos.current)}
+          onClose={() => setPreviewOpen(false)}
+          busy={slicing}
+        />
+      )}
 
       {(loading || cutting) && <div className="loading-pill">{cutting ? t.cutting : t.loading}</div>}
       {error && (
