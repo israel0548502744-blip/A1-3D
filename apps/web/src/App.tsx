@@ -109,7 +109,7 @@ export function App() {
       <input
         ref={fileRef}
         type="file"
-        accept=".stl,.3mf,.obj,model/stl,model/3mf"
+        accept=".stl,.3mf,.obj,.step,.stp,model/stl,model/3mf,model/step"
         multiple
         hidden
         onChange={(e) => onFiles(e.target.files)}

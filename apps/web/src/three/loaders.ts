@@ -56,5 +56,44 @@ export async function loadModelFile(file: File): Promise<LoadedModel> {
     const obj = new ThreeMFLoader().parse(buf);
     return finalize(flatten(obj));
   }
+  if (ext === "step" || ext === "stp") {
+    return loadStep(buf);
+  }
   throw new Error("unsupported-format");
+}
+
+// STEP/IGES via the OpenCascade (occt-import-js) WASM engine, loaded lazily the
+// first time a CAD file is opened so the ~8 MB module isn't in the main bundle.
+async function loadStep(buf: ArrayBuffer): Promise<LoadedModel> {
+  const occtimportjs = (await import("occt-import-js")).default;
+  const wasmUrl = (await import("occt-import-js/dist/occt-import-js.wasm?url")).default;
+  const occt = await occtimportjs({ locateFile: () => wasmUrl });
+  const result = occt.ReadStepFile(new Uint8Array(buf), null);
+  if (!result.success || !result.meshes || result.meshes.length === 0) {
+    throw new Error("step-failed");
+  }
+  let vTotal = 0;
+  let iTotal = 0;
+  for (const m of result.meshes) {
+    vTotal += m.attributes.position.array.length;
+    iTotal += m.index.array.length;
+  }
+  const positions = new Float32Array(vTotal);
+  const indices = new Uint32Array(iTotal);
+  let vo = 0;
+  let io = 0;
+  let base = 0;
+  for (const m of result.meshes) {
+    const pa = m.attributes.position.array;
+    positions.set(pa, vo);
+    const ia = m.index.array;
+    for (let i = 0; i < ia.length; i++) indices[io + i] = ia[i] + base;
+    base += pa.length / 3;
+    vo += pa.length;
+    io += ia.length;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  g.setIndex(new THREE.BufferAttribute(indices, 1));
+  return finalize(g.toNonIndexed());
 }
