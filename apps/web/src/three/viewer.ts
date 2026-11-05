@@ -315,6 +315,16 @@ export class Viewer {
       x += it.w + gap;
       rowDepth = Math.max(rowDepth, it.d);
     }
+    // Centre the whole packed block on the bed, so it isn't stuck in a corner.
+    if (this.entries.length > 0) {
+      const all = new THREE.Box3();
+      this.entries.forEach((e) => all.expandByObject(e.mesh));
+      const c = all.getCenter(new THREE.Vector3());
+      this.entries.forEach((e) => {
+        e.mesh.position.x -= c.x;
+        e.mesh.position.y -= c.y;
+      });
+    }
     this.emit();
   }
 
@@ -413,7 +423,9 @@ export class Viewer {
         new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.05 }),
       );
       geo.computeBoundingBox();
-      mesh.userData.triangles = Math.round(geo.getAttribute("position").count / 3);
+      mesh.userData.triangles = geo.index
+        ? geo.index.count / 3
+        : Math.round(geo.getAttribute("position").count / 3);
       const id = `m${++this.seq}`;
       if (!firstId) firstId = id;
       this.entries.push({ id, name: `${baseName}-${i === 0 ? "A" : "B"}`, mesh, scalePct: 100 });
