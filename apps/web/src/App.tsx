@@ -7,15 +7,18 @@ export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { models, theme, loading, error, setModels, setTheme, setLoading, setError } = useStore();
+  const { models, theme, loading, error, cut, setModels, setTheme, setLoading, setError, setCut } =
+    useStore();
   const sel = useStore(selectedModel);
   const [lock, setLock] = useState(true);
+  const [cutting, setCutting] = useState(false);
 
   // Create the viewer once.
   useEffect(() => {
     if (!containerRef.current) return;
-    const viewer = new Viewer(containerRef.current, setModels);
+    const viewer = new Viewer(containerRef.current, setModels, setCut);
     viewerRef.current = viewer;
+    (window as unknown as { __viewer?: Viewer }).__viewer = viewer; // for E2E checks
     const ro = new ResizeObserver((entries) => {
       const r = entries[0].contentRect;
       viewer.resize(r.width, r.height);
@@ -49,6 +52,20 @@ export function App() {
     } finally {
       setLoading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function applyCut() {
+    setError(null);
+    setCutting(true);
+    try {
+      await viewerRef.current?.applyCut();
+    } catch (e) {
+      const msg = e instanceof Error && e.message === "no-split" ? t.cutNoSplit : t.cutError;
+      viewerRef.current?.cancelCut();
+      setError(msg);
+    } finally {
+      setCutting(false);
     }
   }
 
@@ -268,21 +285,46 @@ export function App() {
                   </div>
 
                   <div className="section">
+                    <h3>{t.cut}</h3>
+                    {cut ? (
+                      <>
+                        <Slider
+                          label={t.cutHeight}
+                          value={Math.round((cut.h - cut.min) * 10) / 10}
+                          min={0.5}
+                          max={Math.round((cut.max - cut.min) * 10) / 10}
+                          step={0.5}
+                          unit="mm"
+                          onChange={(mm) => v.setCutHeight(cut.min + mm)}
+                        />
+                        <div className="grid2">
+                          <button className="btn ghost" onClick={() => v.cancelCut()}>
+                            {t.cutCancel}
+                          </button>
+                          <button className="btn" onClick={applyCut}>
+                            ✂ {t.cutApply}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <button className="btn ghost block" onClick={() => v.enterCutMode(sel.id)}>
+                        ✂ {t.cut}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="section">
                     <h3>{t.slice}</h3>
                     <button className="btn block" onClick={exportStl}>
                       ⬇ {t.exportStl}
                     </button>
-                    <div className="soon" style={{ marginTop: 10 }}>
+                    <div className="soon" style={{ marginTop: 12 }}>
                       <span style={{ fontSize: 13, color: "var(--muted)" }}>{t.slice}</span>
                       <span className="tag">{t.notYet}</span>
                     </div>
                     <p style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, margin: "8px 0 0" }}>
                       {t.sliceSoon}
                     </p>
-                    <div className="soon" style={{ marginTop: 12 }}>
-                      <span style={{ fontSize: 13, color: "var(--muted)" }}>{t.cut}</span>
-                      <span className="tag">{t.notYet}</span>
-                    </div>
                   </div>
                 </>
               )}
@@ -291,7 +333,7 @@ export function App() {
         </div>
       </div>
 
-      {loading && <div className="loading-pill">{t.loading}</div>}
+      {(loading || cutting) && <div className="loading-pill">{cutting ? t.cutting : t.loading}</div>}
       {error && (
         <div className="toast">
           <span>{error}</span>

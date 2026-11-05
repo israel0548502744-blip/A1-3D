@@ -2,7 +2,14 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { loadModelFile } from "./loaders";
+import { cutByZ } from "./cut";
 import type { ModelInfo, Theme } from "../store";
+
+export interface CutState {
+  h: number;
+  min: number;
+  max: number;
+}
 
 export const BED = 256;
 const HALF = BED / 2;
@@ -32,11 +39,18 @@ export class Viewer {
   private theme: Theme = "dark";
   private bedGroup = new THREE.Group();
   private onChange: (m: ModelInfo[]) => void;
+  private onCut: (c: CutState | null) => void;
+  private cut: { id: string; h: number; min: number; max: number; plane: THREE.Mesh } | null = null;
   private seq = 0;
   private raf = 0;
 
-  constructor(container: HTMLElement, onChange: (m: ModelInfo[]) => void) {
+  constructor(
+    container: HTMLElement,
+    onChange: (m: ModelInfo[]) => void,
+    onCut: (c: CutState | null) => void = () => {},
+  ) {
     this.onChange = onChange;
+    this.onCut = onCut;
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
@@ -141,6 +155,7 @@ export class Viewer {
   }
 
   private onPointerDown = (e: PointerEvent) => {
+    if (this.cut) return; // don't change selection mid-cut
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -320,6 +335,98 @@ export class Viewer {
     this.controls.update();
   }
 
+  // ---- Cut mode (split a model by a horizontal plane) ----
+
+  enterCutMode(id: string) {
+    const e = this.entries.find((v) => v.id === id);
+    if (!e) return;
+    this.selectedId = id;
+    const bb = new THREE.Box3().setFromObject(e.mesh);
+    const min = bb.min.z;
+    const max = bb.max.z;
+    const h = (min + max) / 2;
+    const footprint = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y) * 1.3 + 10;
+    const plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(footprint, footprint),
+      new THREE.MeshBasicMaterial({
+        color: 0x1fc45e,
+        transparent: true,
+        opacity: 0.28,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    const c = bb.getCenter(new THREE.Vector3());
+    plane.position.set(c.x, c.y, h);
+    this.scene.add(plane);
+    this.cut = { id, h, min, max, plane };
+    this.onCut({ h, min, max });
+    this.emit();
+  }
+
+  setCutHeight(h: number) {
+    if (!this.cut) return;
+    this.cut.h = h;
+    this.cut.plane.position.z = h;
+    this.onCut({ h, min: this.cut.min, max: this.cut.max });
+  }
+
+  cancelCut() {
+    if (!this.cut) return;
+    this.scene.remove(this.cut.plane);
+    this.cut.plane.geometry.dispose();
+    (this.cut.plane.material as THREE.Material).dispose();
+    this.cut = null;
+    this.onCut(null);
+  }
+
+  /** Perform the real boolean cut. Returns the number of resulting parts. */
+  async applyCut(): Promise<number> {
+    if (!this.cut) return 0;
+    const entry = this.entries.find((v) => v.id === this.cut!.id);
+    if (!entry) {
+      this.cancelCut();
+      return 0;
+    }
+    const h = this.cut.h;
+    entry.mesh.updateMatrixWorld(true);
+    const world = entry.mesh.geometry.clone();
+    world.applyMatrix4(entry.mesh.matrixWorld);
+
+    const { lower, upper } = await cutByZ(world, h);
+    world.dispose();
+
+    const parts = [lower, upper].filter((g): g is THREE.BufferGeometry => g !== null);
+    if (parts.length < 2) {
+      // Plane missed the body — nothing to split. Leave the model untouched.
+      throw new Error("no-split");
+    }
+
+    const baseName = entry.name;
+    this.cancelCut();
+    this.remove(entry.id);
+
+    let firstId: string | null = null;
+    parts.forEach((geo, i) => {
+      const mesh = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.05 }),
+      );
+      geo.computeBoundingBox();
+      mesh.userData.triangles = Math.round(geo.getAttribute("position").count / 3);
+      const id = `m${++this.seq}`;
+      if (!firstId) firstId = id;
+      this.entries.push({ id, name: `${baseName}-${i === 0 ? "A" : "B"}`, mesh, scalePct: 100 });
+      this.scene.add(mesh);
+      this.dropToBed(id, false);
+    });
+    this.selectedId = firstId;
+    this.autoArrange();
+    this.fitView();
+    this.emit();
+    return parts.length;
+  }
+
   exportSTL(): Blob {
     const group = new THREE.Group();
     this.entries.forEach((e) => group.add(e.mesh.clone()));
@@ -379,6 +486,14 @@ export class Viewer {
       };
     });
     this.onChange(infos);
+  }
+
+  /** Test/debug helper: world-space size of each model, in mm. */
+  debugBounds(): { id: string; name: string; size: [number, number, number] }[] {
+    return this.entries.map((e) => {
+      const s = new THREE.Box3().setFromObject(e.mesh).getSize(new THREE.Vector3());
+      return { id: e.id, name: e.name, size: [round(s.x), round(s.y), round(s.z)] };
+    });
   }
 
   resize(w: number, h: number) {

@@ -16,17 +16,25 @@ export interface ModelInfo {
 export type Theme = "dark" | "light";
 export type GizmoMode = "translate" | "rotate" | "scale";
 
+export interface CutUi {
+  h: number;
+  min: number;
+  max: number;
+}
+
 interface AppState {
   models: ModelInfo[];
   theme: Theme;
   gizmo: GizmoMode;
   loading: boolean;
   error: string | null;
+  cut: CutUi | null;
   setModels: (m: ModelInfo[]) => void;
   setTheme: (t: Theme) => void;
   setGizmo: (g: GizmoMode) => void;
   setLoading: (b: boolean) => void;
   setError: (e: string | null) => void;
+  setCut: (c: CutUi | null) => void;
 }
 
 const initialTheme: Theme =
@@ -42,11 +50,13 @@ export const useStore = create<AppState>((set) => ({
   gizmo: "translate",
   loading: false,
   error: null,
+  cut: null,
   setModels: (models) => set({ models }),
   setTheme: (theme) => set({ theme }),
   setGizmo: (gizmo) => set({ gizmo }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
+  setCut: (cut) => set({ cut }),
 }));
 
 export const selectedModel = (s: AppState): ModelInfo | undefined =>
