@@ -1,14 +1,54 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { t } from "./i18n";
 import type { SliceResult } from "./slicer/pipeline";
 import type { MachineSettings } from "./slicer/estimate";
+import type { LayerPaths } from "./slicer/toolpath";
 
-const COL = { outer: "#1fc45e", inner: "#4a90d9", infill: "#e8912f" };
+const COL = {
+  outer: new THREE.Color(0x1fc45e),
+  inner: new THREE.Color(0x4a90d9),
+  infill: new THREE.Color(0xe8912f),
+};
+const LEGEND = { outer: "#1fc45e", inner: "#4a90d9", infill: "#e8912f" };
 
 function fmtTime(sec: number): string {
   const h = Math.floor(sec / 3600);
   const m = Math.round((sec % 3600) / 60);
   return h > 0 ? `${h} ${t.hours} ${m} ${t.minutes}` : `${m} ${t.minutes}`;
+}
+
+/** Build a coloured LineSegments geometry for every toolpath, stacked by Z. */
+function buildGeometry(layers: LayerPaths[]) {
+  const pos: number[] = [];
+  const col: number[] = [];
+  const push = (x: number, y: number, z: number, c: THREE.Color) => {
+    pos.push(x, y, z);
+    col.push(c.r, c.g, c.b);
+  };
+  let zmax = 0;
+  for (const layer of layers) {
+    const z = layer.z;
+    if (z > zmax) zmax = z;
+    for (const p of layer.paths) {
+      const c = COL[p.type];
+      const pts = p.pts;
+      for (let i = 1; i < pts.length; i++) {
+        push(pts[i - 1].x, pts[i - 1].y, z, c);
+        push(pts[i].x, pts[i].y, z, c);
+      }
+      if (p.closed && pts.length > 2) {
+        push(pts[pts.length - 1].x, pts[pts.length - 1].y, z, c);
+        push(pts[0].x, pts[0].y, z, c);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.computeBoundingBox();
+  return { geometry: g, zmax };
 }
 
 export function SlicePreview(props: {
@@ -22,59 +62,106 @@ export function SlicePreview(props: {
   busy: boolean;
 }) {
   const { result, layer, setLayer, settings, setSettings } = props;
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mountRef = useRef<HTMLDivElement>(null);
+  const clipRef = useRef<THREE.Plane | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const linesRef = useRef<THREE.LineSegments | null>(null);
 
-  const bounds = useMemo(() => {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const lp of result.layers)
-      for (const p of lp.paths)
-        for (const pt of p.pts) {
-          if (pt.x < minX) minX = pt.x;
-          if (pt.y < minY) minY = pt.y;
-          if (pt.x > maxX) maxX = pt.x;
-          if (pt.y > maxY) maxY = pt.y;
-        }
-    if (!isFinite(minX)) return { minX: 0, minY: 0, maxX: 1, maxY: 1 };
-    return { minX, minY, maxX, maxY };
+  // Create the three.js scene once.
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(mount.clientWidth, mount.clientHeight);
+    renderer.localClippingEnabled = true;
+    mount.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const scene = new THREE.Scene();
+    const css = getComputedStyle(document.documentElement);
+    scene.background = new THREE.Color((css.getPropertyValue("--surface-2") || "#1e2225").trim());
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / mount.clientHeight, 0.1, 5000);
+    camera.up.set(0, 0, 1);
+    camera.position.set(120, -140, 120);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1000);
+    clipRef.current = plane;
+
+    let raf = 0;
+    const loop = () => {
+      controls.update();
+      renderer.render(scene, camera);
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+
+    const ro = new ResizeObserver(() => {
+      const w = mount.clientWidth;
+      const h = mount.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    ro.observe(mount);
+
+    // expose for repositioning after geometry loads
+    (scene.userData as { camera?: THREE.Camera; controls?: OrbitControls }).camera = camera;
+    (scene.userData as { camera?: THREE.Camera; controls?: OrbitControls }).controls = controls;
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      controls.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    };
+  }, []);
+
+  // Rebuild lines whenever the slice result changes.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    if (linesRef.current) {
+      scene.remove(linesRef.current);
+      linesRef.current.geometry.dispose();
+      (linesRef.current.material as THREE.Material).dispose();
+    }
+    const { geometry } = buildGeometry(result.layers);
+    const material = new THREE.LineBasicMaterial({
+      vertexColors: true,
+      clippingPlanes: clipRef.current ? [clipRef.current] : [],
+    });
+    const lines = new THREE.LineSegments(geometry, material);
+    scene.add(lines);
+    linesRef.current = lines;
+
+    // frame the model
+    const bb = geometry.boundingBox;
+    const ud = scene.userData as { camera?: THREE.PerspectiveCamera; controls?: OrbitControls };
+    if (bb && ud.camera && ud.controls) {
+      const center = bb.getCenter(new THREE.Vector3());
+      const radius = bb.getBoundingSphere(new THREE.Sphere()).radius || 50;
+      ud.controls.target.copy(center);
+      const dir = new THREE.Vector3(0.8, -1, 0.7).normalize();
+      ud.camera.position.copy(center).addScaledVector(dir, radius * 2.4);
+      ud.controls.update();
+    }
   }, [result]);
 
+  // Reveal layers up to the slider position via the clipping plane.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const size = canvas.clientWidth;
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const css = getComputedStyle(document.documentElement);
-    ctx.fillStyle = css.getPropertyValue("--surface-2") || "#1e2225";
-    ctx.fillRect(0, 0, size, size);
-
-    const pad = 16;
-    const w = bounds.maxX - bounds.minX || 1;
-    const h = bounds.maxY - bounds.minY || 1;
-    const scale = Math.min((size - 2 * pad) / w, (size - 2 * pad) / h);
-    const ox = (size - w * scale) / 2;
-    const oy = (size - h * scale) / 2;
-    // print Y up -> canvas y down
-    const X = (x: number) => ox + (x - bounds.minX) * scale;
-    const Y = (y: number) => size - (oy + (y - bounds.minY) * scale);
-
+    const plane = clipRef.current;
+    if (!plane) return;
     const lp = result.layers[Math.min(layer, result.layers.length - 1)];
-    if (!lp) return;
-    ctx.lineWidth = 1.6;
-    ctx.lineJoin = "round";
-    for (const p of lp.paths) {
-      if (p.pts.length < 2) continue;
-      ctx.strokeStyle = COL[p.type];
-      ctx.beginPath();
-      ctx.moveTo(X(p.pts[0].x), Y(p.pts[0].y));
-      for (let i = 1; i < p.pts.length; i++) ctx.lineTo(X(p.pts[i].x), Y(p.pts[i].y));
-      if (p.closed) ctx.closePath();
-      ctx.stroke();
-    }
-  }, [result, layer, bounds]);
+    plane.constant = (lp ? lp.z : 1000) + result.settings.layerHeight;
+  }, [layer, result]);
 
   const e = result.estimate;
   const maxLayer = Math.max(0, result.layers.length - 1);
@@ -91,12 +178,12 @@ export function SlicePreview(props: {
       </div>
 
       <div className="overlay-body">
-        <canvas ref={canvasRef} className="slice-canvas" />
+        <div ref={mountRef} className="slice-canvas" />
 
         <div className="legend">
-          <span><i style={{ background: COL.outer }} />{t.wallOuter}</span>
-          <span><i style={{ background: COL.inner }} />{t.wallInner}</span>
-          <span><i style={{ background: COL.infill }} />{t.infillLegend}</span>
+          <span><i style={{ background: LEGEND.outer }} />{t.wallOuter}</span>
+          <span><i style={{ background: LEGEND.inner }} />{t.wallInner}</span>
+          <span><i style={{ background: LEGEND.infill }} />{t.infillLegend}</span>
         </div>
 
         <div className="field">
