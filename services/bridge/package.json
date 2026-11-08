@@ -1,0 +1,10 @@
+{
+  "name": "bambu-control-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Home bridge: connects the phone app to a Bambu Lab A1 over the LAN (MQTT + FTPS) and relays securely for remote control.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  }
+}
