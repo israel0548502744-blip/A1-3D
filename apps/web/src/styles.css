@@ -392,3 +392,48 @@ input[type="range"]::-moz-range-thumb {
   padding: 12px 22px; border-radius: 999px; font-weight: 600;
   background: var(--card-solid); border: 1px solid var(--green); color: var(--text); box-shadow: var(--glow-shadow);
 }
+
+/* Printer picker */
+.search {
+  display: flex; align-items: center; gap: 10px; padding: 0 18px; height: 58px; margin-top: 4px;
+  border-radius: 999px; border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, var(--card-top), var(--card-bottom)); color: var(--sub);
+}
+.search input {
+  flex: 1; min-width: 0; height: 100%; background: none; border: none; outline: none; font-size: 16px; color: var(--text);
+}
+.search input::placeholder { color: var(--faint); }
+.brand-pills { display: flex; gap: 8px; overflow-x: auto; padding: 14px 2px 6px; scrollbar-width: none; }
+.brand-pills::-webkit-scrollbar { display: none; }
+.brand-pills button {
+  flex: 0 0 auto; padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 600;
+  background: var(--veil); border: 1px solid var(--stroke); color: var(--sub);
+}
+.brand-pills button.on { background: var(--accent); color: #fff; border-color: transparent; }
+.list-head { margin: 22px 4px 10px; font-size: 16px; color: var(--sub); font-weight: 700; }
+.brand-head { margin: 18px 6px 8px; font-size: 13px; color: var(--faint); font-weight: 700; letter-spacing: 0.3px; }
+.printer-list { display: flex; flex-direction: column; gap: 8px; }
+.printer-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: start;
+  border-radius: 22px; border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, var(--card-top), var(--card-bottom)); color: var(--text);
+}
+.printer-row:active { transform: scale(0.985); }
+.printer-row.on { border-color: var(--green); background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.05)); }
+.printer-row-text { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.printer-row-text b { font-size: 16px; }
+.printer-row-text .sub { font-size: 13px; }
+.printer-check { color: var(--green-ink); flex: 0 0 auto; }
+.printer-head .sub { font-size: 13.5px; }
+
+.howto { margin: 0 0 12px; padding-inline-start: 22px; color: var(--text); line-height: 1.7; font-size: 15px; }
+.howto li { margin-bottom: 4px; }
+.howto li::marker { color: var(--green-ink); font-weight: 700; }
+.warn-text { color: var(--amber); }
+.panel-title .tag { margin-inline-start: 8px; }
+.notices {
+  direction: ltr; text-align: left; white-space: pre-wrap; word-break: break-word;
+  max-height: 60vh; overflow: auto; margin: 14px 0 0; padding: 14px; border-radius: 18px;
+  background: var(--sink); border: 1px solid var(--stroke); color: var(--sub);
+  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}

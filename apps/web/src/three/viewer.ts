@@ -11,9 +11,13 @@ export interface CutState {
   max: number;
 }
 
-export const BED = 256;
-const HALF = BED / 2;
-const HEIGHT = 256;
+/** Printable volume in mm. Default is the Bambu Lab A1; set per printer with setBed(). */
+export interface BedSize {
+  x: number;
+  y: number;
+  z: number;
+}
+export const DEFAULT_BED: BedSize = { x: 256, y: 256, z: 256 };
 
 interface Entry {
   id: string;
@@ -39,6 +43,7 @@ export class Viewer {
   private selectedId: string | null = null;
   private theme: Theme = "dark";
   private bedGroup = new THREE.Group();
+  private bed: BedSize = { ...DEFAULT_BED };
   private onChange: (m: ModelInfo[]) => void;
   private onCut: (c: CutState | null) => void;
   private cut: { id: string; h: number; min: number; max: number; plane: THREE.Mesh } | null = null;
@@ -95,24 +100,31 @@ export class Viewer {
     const p = PALETTE[this.theme];
 
     const plate = new THREE.Mesh(
-      new THREE.PlaneGeometry(BED, BED),
+      new THREE.PlaneGeometry(this.bed.x, this.bed.y),
       new THREE.MeshStandardMaterial({ color: p.bed, roughness: 0.95, metalness: 0 }),
     );
     plate.name = "plate";
     this.bedGroup.add(plate);
 
-    const grid = new THREE.GridHelper(BED, 32, p.grid, p.grid);
-    grid.rotation.x = Math.PI / 2; // GridHelper is XZ by default; put it on XY
-    grid.position.z = 0.1;
-    (grid.material as THREE.Material).opacity = 0.5;
-    (grid.material as THREE.Material).transparent = true;
+    // Rectangular 10 mm grid (GridHelper is square-only).
+    const hx = this.bed.x / 2;
+    const hy = this.bed.y / 2;
+    const pts: number[] = [];
+    for (let x = -hx; x <= hx + 0.001; x += 10) pts.push(x, -hy, 0.1, x, hy, 0.1);
+    for (let y = -hy; y <= hy + 0.001; y += 10) pts.push(-hx, y, 0.1, hx, y, 0.1);
+    const gridGeo = new THREE.BufferGeometry();
+    gridGeo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    const grid = new THREE.LineSegments(
+      gridGeo,
+      new THREE.LineBasicMaterial({ color: p.grid, transparent: true, opacity: 0.5 }),
+    );
     this.bedGroup.add(grid);
 
     const box = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(BED, BED, HEIGHT)),
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(this.bed.x, this.bed.y, this.bed.z)),
       new THREE.LineBasicMaterial({ color: p.edge, transparent: true, opacity: 0.3 }),
     );
-    box.position.set(0, 0, HEIGHT / 2);
+    box.position.set(0, 0, this.bed.z / 2);
     this.bedGroup.add(box);
 
     // Front-left corner marker = bed origin, to orient the user.
@@ -120,7 +132,7 @@ export class Viewer {
       new THREE.SphereGeometry(2.5, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0x00ae42 }),
     );
-    origin.position.set(-HALF, -HALF, 0);
+    origin.position.set(-hx, -hy, 0);
     this.bedGroup.add(origin);
   }
 
@@ -129,6 +141,15 @@ export class Viewer {
     this.scene.background = null;
     this.buildBed();
     this.refreshMaterials();
+  }
+
+  /** Switch to another printer's build volume; re-checks every model against it. */
+  setBed(bed: BedSize) {
+    if (bed.x === this.bed.x && bed.y === this.bed.y && bed.z === this.bed.z) return;
+    this.bed = { ...bed };
+    this.buildBed();
+    this.fitView();
+    this.emit();
   }
 
   async load(file: File) {
@@ -299,12 +320,14 @@ export class Viewer {
       return { e, w: s.x, d: s.y };
     });
     items.sort((a, b) => b.d - a.d);
-    let x = -HALF + gap;
-    let y = -HALF + gap;
+    const hx = this.bed.x / 2;
+    const hy = this.bed.y / 2;
+    let x = -hx + gap;
+    let y = -hy + gap;
     let rowDepth = 0;
     for (const it of items) {
-      if (x + it.w > HALF - gap) {
-        x = -HALF + gap;
+      if (x + it.w > hx - gap) {
+        x = -hx + gap;
         y += rowDepth + gap;
         rowDepth = 0;
       }
@@ -333,8 +356,8 @@ export class Viewer {
   fitView() {
     // Always frame the whole bed plus any models, so the plate stays visible.
     const box = new THREE.Box3(
-      new THREE.Vector3(-HALF, -HALF, 0),
-      new THREE.Vector3(HALF, HALF, 0),
+      new THREE.Vector3(-this.bed.x / 2, -this.bed.y / 2, 0),
+      new THREE.Vector3(this.bed.x / 2, this.bed.y / 2, 0),
     );
     this.entries.forEach((e) => box.expandByObject(e.mesh));
     const center = box.getCenter(new THREE.Vector3());
@@ -456,11 +479,11 @@ export class Viewer {
     const bb = new THREE.Box3().setFromObject(mesh);
     const eps = 0.01;
     return (
-      bb.min.x < -HALF - eps ||
-      bb.max.x > HALF + eps ||
-      bb.min.y < -HALF - eps ||
-      bb.max.y > HALF + eps ||
-      bb.max.z > HEIGHT + eps ||
+      bb.min.x < -this.bed.x / 2 - eps ||
+      bb.max.x > this.bed.x / 2 + eps ||
+      bb.min.y < -this.bed.y / 2 - eps ||
+      bb.max.y > this.bed.y / 2 + eps ||
+      bb.max.z > this.bed.z + eps ||
       bb.min.z < -eps
     );
   }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { House, Boxes, Printer, Ellipsis } from "lucide-react";
 import { Viewer } from "./three/viewer";
-import { useStore, selectedModel, type Screen, type EditorTab } from "./store";
+import { useStore, selectedModel, currentPrinter, currentBed, type Screen, type EditorTab } from "./store";
 import { t } from "./i18n";
 import { runSlicer, type SliceResult } from "./slicer/pipeline";
 import { A1_DEFAULTS, type MachineSettings } from "./slicer/estimate";
@@ -11,6 +11,8 @@ import { HomeScreen } from "./screens/HomeScreen";
 import { EditorScreen } from "./screens/EditorScreen";
 import { PrinterScreen } from "./screens/PrinterScreen";
 import { MoreScreen } from "./screens/MoreScreen";
+import { PrinterPicker } from "./screens/PrinterPicker";
+import { printerName } from "./printers/display";
 
 export function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -18,6 +20,10 @@ export function App() {
   const [viewer, setViewer] = useState<Viewer | null>(null);
   const s = useStore();
   const sel = useStore(selectedModel);
+  const printer = useStore(currentPrinter);
+  const bed = useStore(currentBed);
+  // First launch: ask which printer the user has (can be skipped).
+  const [pickerOpen, setPickerOpen] = useState(() => !useStore.getState().printerChosen);
   const [cutting, setCutting] = useState(false);
   const slicePos = useRef<Float32Array | null>(null);
   const [sliceResult, setSliceResult] = useState<SliceResult | null>(null);
@@ -54,6 +60,11 @@ export function App() {
     return () => mq.removeEventListener?.("change", on);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Build volume follows the chosen printer (or the user's edit of it).
+  useEffect(() => {
+    viewer?.setBed(bed);
+  }, [bed, viewer]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", s.theme);
@@ -172,6 +183,7 @@ export function App() {
       {s.screen === "home" && (
         <HomeScreen
           models={s.models}
+          printer={printer}
           onOpen={openFiles}
           go={go}
           onSelect={(id) => viewer?.select(id)}
@@ -188,6 +200,8 @@ export function App() {
         tab={s.editorTab}
         setTab={s.setEditorTab}
         cut={s.cut}
+        bed={bed}
+        printerLabel={printerName(printer)}
         slicing={slicing}
         onBack={() => go("home")}
         onOpen={openFiles}
@@ -196,7 +210,15 @@ export function App() {
         onApplyCut={applyCut}
       />
 
-      {s.screen === "printer" && <PrinterScreen />}
+      {s.screen === "printer" && (
+        <PrinterScreen
+          printer={printer}
+          bed={bed}
+          edited={!!s.bedOverrides[printer.id]}
+          onChange={() => setPickerOpen(true)}
+          onBed={(b) => s.setBedOverride(printer.id, b)}
+        />
+      )}
       {s.screen === "more" && <MoreScreen look={s.look} setLook={s.setLook} />}
 
       {!onEditor && (
@@ -209,6 +231,21 @@ export function App() {
             { value: "printer", label: t.navPrinter, icon: Printer },
             { value: "more", label: t.navMore, icon: Ellipsis },
           ]}
+        />
+      )}
+
+      {pickerOpen && (
+        <PrinterPicker
+          currentId={s.printerId}
+          firstRun={!s.printerChosen}
+          onPick={(id) => {
+            s.setPrinter(id);
+            setPickerOpen(false);
+          }}
+          onClose={() => {
+            if (!s.printerChosen) s.setPrinter(s.printerId); // skipped: keep the default
+            setPickerOpen(false);
+          }}
         />
       )}
 

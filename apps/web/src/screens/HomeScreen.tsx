@@ -1,10 +1,13 @@
 import { Box, FilePlus2, Layers, Scissors, Printer, Boxes } from "lucide-react";
 import { t } from "../i18n";
 import type { ModelInfo, Screen, EditorTab } from "../store";
+import type { PrinterModel } from "../printers/catalog";
+import { printerName } from "../printers/display";
 import { ScreenTitle, Hero, CategoryCard, GlassCard } from "../ui/kit";
 
 export function HomeScreen(props: {
   models: ModelInfo[];
+  printer: PrinterModel;
   onOpen: () => void;
   go: (s: Screen, tab?: EditorTab) => void;
   onSelect: (id: string) => void;
@@ -41,11 +44,11 @@ export function HomeScreen(props: {
           onClick={has ? () => props.go("editor", "cut") : props.onOpen}
         />
         <CategoryCard
-          title={t.catPrinter}
-          sub={t.printerNotConnected}
+          title={printerName(props.printer)}
+          sub={t.connection[props.printer.connection]}
           icon={Printer}
           tone="primary"
-          badge={t.notYet}
+          badge={props.printer.connection === "file" ? undefined : t.notYet}
           onClick={() => props.go("printer")}
         />
       </div>

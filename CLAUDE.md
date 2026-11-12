@@ -9,17 +9,25 @@
 ## עקרונות שאינם נתונים למשא ומתן
 - אין נתונים מזויפים, אין סימולציה שמתחזה לחיבור, ואין כפתורים דקורטיביים.
   כל יכולת שלא מומשה מסומנת בממשק כ"טרם מומש".
-- לא שולחים STL למדפסת. תמיד עושים Slicing אמיתי (OrcaSlicer) ומייצרים `.gcode.3mf`.
-- פעולה מוצגת כהצלחה רק אחרי שהמדפסת אישרה אותה (דוח MQTT).
+- לא שולחים STL למדפסת. תמיד עושים Slicing אמיתי (הסלייסר שלנו) ומייצרים את הקובץ שהמדפסת מצפה לו: `.gcode.3mf` לבמבו, `.gcode` לשאר.
+- פעולה מוצגת כהצלחה רק אחרי שהמדפסת אישרה אותה (דוח סטטוס מהמדפסת).
 - לא עוקפים את מנגנון ה-Authorization של Bambu Lab.
 - עובדים בשלבים לפי `docs/ROADMAP.md`. מתקדמים לשלב הבא רק כשהשלב הנוכחי יציב ונבדק.
+
+## משפטי (האפליקציה מיועדת למכירה)
+- לא מכניסים לאפליקציה קוד ברישיון AGPL/GPL (OrcaSlicer, Bambu Studio, PrusaSlicer, CuraEngine, Bambuddy) ולא קבצי פרופיל של יצרנים או סלייסרים. G-code התחלה/סיום כותבים בעצמנו.
+- כל תלות חדשה: לבדוק רישיון (`node scripts/license-audit.mjs apps/web`) ולהריץ `node scripts/notices.mjs`.
+- שמות מותגים רק לציון תאימות. בלי לוגואים, בלי תמונות של יצרנים, בלי לרמוז על קשר.
+- מתחברים למדפסות רק בדרכים רשמיות או בפרוטוקולים מפורסמים. בלי התחזות לתוכנת היצרן ובלי עקיפת הרשאות.
+- פירוט: `docs/LEGAL.md`. תמיכה במדפסות: `docs/PRINTERS.md`.
 
 ## מסמכים
 - `docs/RESEARCH.md`: מחקר: פרוטוקולים, מנועי Slicer, רישיונות ומגבלות.
 - `docs/ARCHITECTURE.md`: הארכיטקטורה שנבחרה.
 - `docs/ROADMAP.md`: שלבים, משימות וקריטריוני קבלה.
 
-## מבנה (מתוכנן)
-- `apps/mobile`: ‏React + TypeScript + Vite + React Three Fiber, ארוז כ-Android דרך Capacitor.
-- `services/gateway`: ‏Python 3.12 + FastAPI. קבצים, Slicer (OrcaSlicer CLI), תקשורת מדפסת ו-WebSocket.
-- `deploy/`: ‏Docker Compose ל-Gateway הביתי.
+## מבנה
+- `apps/web`: ‏React + TypeScript + Vite + three.js. העורך, הסלייסר, קטלוג המדפסות והממשק. בדיקות: `npm test`.
+- `apps/android`: מעטפת Kotlin שמריצה את `apps/web` מתוך ה-APK (WebViewAssetLoader). נבנה ב-GitHub Actions.
+- `services/bridge`: הגשר הביתי לשליטה מרחוק (ליבת פרוטוקול במבו + בדיקות).
+- `scripts/`: סריקת רישיונות ויצירת קובץ ההודעות.

@@ -147,8 +147,88 @@ export const he = {
   aboutSub: "גרסה, רישיונות וקוד פתוח",
   licensesTitle: "רכיבי קוד פתוח",
   licenses:
-    "three.js (MIT) · React (MIT) · manifold-3d (Apache-2.0) · occt-import-js (LGPL-2.1) · clipper-lib (Boost) · zustand (MIT) · lucide (ISC) · Rubik (OFL-1.1)",
+    "three.js (MIT) · fflate (MIT) · React (MIT) · zustand (MIT) · manifold-3d (Apache-2.0) · occt-import-js + OpenCASCADE (LGPL-2.1) · clipper-lib (Boost) · lucide (ISC) · Rubik (OFL-1.1) · AndroidX, Kotlin (Apache-2.0)",
+  showNotices: "הצגת טקסט הרישיונות המלא",
+  hideNotices: "הסתרת טקסט הרישיונות",
+  noticesError: "לא הצלחתי לטעון את קובץ הרישיונות.",
   version: "גרסה",
+
+  // Printers
+  choosePrinter: "איזו מדפסת יש לך?",
+  choosePrinterSub: "בוחרים פעם אחת, ואפשר להחליף בכל רגע. לפי זה נקבעים גודל המשטח ודרך החיבור.",
+  changePrinter: "החלפת מדפסת",
+  searchPrinter: "חיפוש מדפסת… למשל \"A1\" או \"Ender\"",
+  popular: "הכי נפוצות",
+  allPrinters: "כל המדפסות",
+  allBrands: "הכל",
+  otherBrand: "אחר",
+  otherModel: {
+    klipper: "מדפסת Klipper אחרת",
+    octoprint: "מדפסת עם OctoPrint",
+    file: "מדפסת אחרת (קובץ בלבד)",
+  } as Record<string, string>,
+  noResults: "לא נמצאה מדפסת. אפשר לבחור \"מדפסת אחרת\" ולהזין את גודל המשטח.",
+  skip: "דלג",
+  selected: "נבחרה",
+  specsCheck: "מידות לבדיקה",
+  bedSize: "גודל המשטח",
+  bedSizeSub: "לפי מפרט היצרן. אם אצלך זה שונה, אפשר לערוך.",
+  bedReset: "חזרה למפרט",
+  edited: "נערך",
+  connectionLabel: "חיבור",
+  connection: {
+    bambu: "Wi-Fi ביתי · מצב מפתח",
+    moonraker: "Wi-Fi ביתי · Klipper",
+    prusalink: "Wi-Fi ביתי · PrusaLink",
+    sdcp: "Wi-Fi ביתי · SDCP",
+    flashforge: "Wi-Fi ביתי · Flashforge",
+    octoprint: "OctoPrint",
+    file: "קובץ ל-SD/USB",
+  } as Record<string, string>,
+  howTo: {
+    bambu: [
+      "במסך המדפסת: הגדרות ← WLAN ← הפעלת LAN Only Mode.",
+      "להפעיל Developer Mode (מופיע אחרי השלב הקודם).",
+      "לרשום IP, מספר סידורי ו-Access Code ולהזין אותם כאן.",
+      "שימו לב: במצב הזה Bambu Handy לא עובד עד שמכבים אותו.",
+    ],
+    moonraker: [
+      "המדפסת מריצה Klipper עם Moonraker (ממשק פתוח).",
+      "מספיק להזין את כתובת ה-IP של המדפסת.",
+      "לא צריך מצב מפתח ולא חשבון ענן.",
+    ],
+    prusalink: [
+      "במדפסת: הגדרות ← רשת ← להפעיל PrusaLink.",
+      "להזין כאן את כתובת ה-IP ואת פרטי הגישה שמוצגים במדפסת.",
+    ],
+    sdcp: [
+      "המדפסת מחוברת ל-Wi-Fi הביתי.",
+      "מספיק להזין את כתובת ה-IP (או לחפש אותה ברשת).",
+    ],
+    flashforge: [
+      "במדפסת: הגדרות ← רשת ← להפעיל מצב LAN.",
+      "להזין כתובת IP, מספר סידורי וקוד בדיקה (Check Code).",
+    ],
+    octoprint: [
+      "המדפסת מחוברת ל-Raspberry Pi עם OctoPrint.",
+      "להזין את כתובת OctoPrint ומפתח API מתוך ההגדרות שלו.",
+    ],
+    file: [
+      "למדפסת הזו אין חיבור רשת נתמך.",
+      "חותכים כאן, שומרים את הקובץ, ומעבירים אותו לכרטיס SD או ל-USB.",
+    ],
+  } as Record<string, string[]>,
+  notes: {
+    nozzleSingle: "המידות לנחיר יחיד.",
+    crealityStock: "בקושחת המקור של חלק מהדגמים Moonraker סגור לגישה. נבדוק מול מדפסת אמיתית לפני שנפעיל.",
+    crealityK2: "לפי דיווחים Moonraker פתוח בקושחת המקור (פורט 7125). ייבדק מול מדפסת אמיתית.",
+    anycubic: "Anycubic לא מפרסמת ממשק מקומי לתוכנות אחרות, ולכן כרגע: העברה בקובץ.",
+    mk3: "חיבור רשת דרך OctoPrint או PrusaLink על Raspberry Pi.",
+    diySize: "הגודל משתנה בין בניות. ודאו שהמידות תואמות למדפסת שלכם.",
+  } as Record<string, string>,
+  connectNotYet: "החיבור למשפחת המדפסות הזו עוד לא מומש. כרגע: עורך, חיתוך לשכבות וייצוא קובץ.",
+  disclaimer:
+    "שמות המותגים והדגמים שייכים לבעליהם ומשמשים רק לציון התאימות. האפליקציה אינה קשורה, ממומנת או מאושרת על ידי יצרני המדפסות.",
 };
 export type Strings = typeof he;
 export const t = he;

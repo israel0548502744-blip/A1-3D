@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { DEFAULT_PRINTER_ID, getPrinter } from "./printers/catalog";
 
 /** UI-facing snapshot of one model. The Viewer owns the real geometry. */
 export interface ModelInfo {
@@ -19,6 +20,12 @@ export type Look = "auto" | "dark" | "light";
 export type Screen = "home" | "editor" | "printer" | "more";
 export type EditorTab = "info" | "edit" | "cut" | "export";
 
+export interface Bed {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface CutUi {
   h: number;
   min: number;
@@ -34,6 +41,13 @@ interface AppState {
   loading: boolean;
   error: string | null;
   cut: CutUi | null;
+  printerId: string;
+  /** False until the user picks a printer the first time (shows the picker). */
+  printerChosen: boolean;
+  /** User-edited build volumes, by printer id. */
+  bedOverrides: Record<string, Bed>;
+  setPrinter: (id: string) => void;
+  setBedOverride: (id: string, bed: Bed | null) => void;
   setModels: (m: ModelInfo[]) => void;
   setLook: (l: Look) => void;
   setSystemDark: (dark: boolean) => void;
@@ -45,6 +59,24 @@ interface AppState {
 }
 
 const LOOK_KEY = "bcs.look";
+const PRINTER_KEY = "bcs.printer";
+const BEDS_KEY = "bcs.beds";
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* not persisted; still applied for this session */
+  }
+}
 
 function readLook(): Look {
   try {
@@ -79,6 +111,20 @@ export const useStore = create<AppState>((set, get) => ({
   loading: false,
   error: null,
   cut: null,
+  printerId: readJson<string | null>(PRINTER_KEY, null) ?? DEFAULT_PRINTER_ID,
+  printerChosen: readJson<string | null>(PRINTER_KEY, null) !== null,
+  bedOverrides: readJson<Record<string, Bed>>(BEDS_KEY, {}),
+  setPrinter: (id) => {
+    writeJson(PRINTER_KEY, id);
+    set({ printerId: id, printerChosen: true });
+  },
+  setBedOverride: (id, bed) => {
+    const next = { ...get().bedOverrides };
+    if (bed) next[id] = bed;
+    else delete next[id];
+    writeJson(BEDS_KEY, next);
+    set({ bedOverrides: next });
+  },
   setModels: (models) => set({ models }),
   setLook: (look) => {
     try {
@@ -101,3 +147,7 @@ export const useStore = create<AppState>((set, get) => ({
 
 export const selectedModel = (s: AppState): ModelInfo | undefined =>
   s.models.find((m) => m.selected);
+
+export const currentPrinter = (s: AppState) => getPrinter(s.printerId);
+/** The build volume in use: the user's edit if any, else the catalog spec. */
+export const currentBed = (s: AppState): Bed => s.bedOverrides[s.printerId] ?? getPrinter(s.printerId).bed;

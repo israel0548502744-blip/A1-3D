@@ -4,9 +4,8 @@ import {
   ArrowDownToLine, Crosshair, LayoutGrid, Trash2, Download, Layers, Scissors, FilePlus2, Box,
 } from "lucide-react";
 import { t } from "../i18n";
-import type { ModelInfo, EditorTab, CutUi } from "../store";
+import type { ModelInfo, EditorTab, CutUi, Bed } from "../store";
 import type { Viewer } from "../three/viewer";
-import { BED } from "../three/viewer";
 import {
   RoundButton, Segmented, ToolButton, Chip, SliderField, PrimaryButton, SecondaryButton, Hero, GlassCard,
 } from "../ui/kit";
@@ -20,6 +19,8 @@ export function EditorScreen(props: {
   tab: EditorTab;
   setTab: (t: EditorTab) => void;
   cut: CutUi | null;
+  bed: Bed;
+  printerLabel: string;
   slicing: boolean;
   onBack: () => void;
   onOpen: () => void;
@@ -49,7 +50,9 @@ export function EditorScreen(props: {
             <span>{t.editorEmptySub}</span>
           </div>
         )}
-        <span className="viewport-badge">{t.bed}</span>
+        <span className="viewport-badge">
+          {props.printerLabel} · <span className="ltr">{props.bed.x}×{props.bed.y}×{props.bed.z} mm</span>
+        </span>
       </div>
 
       {!has ? (
@@ -94,9 +97,9 @@ export function EditorScreen(props: {
                     {sel.outOfBounds ? <Chip tone="bad">{t.outOfBounds}</Chip> : <Chip tone="good">{t.inBounds}</Chip>}
                   </div>
                   <GlassCard className="panel">
-                    <SliderField label={`${t.position} · ${t.axisX}`} value={sel.pos.x} min={-BED / 2} max={BED / 2} step={1} unit=" mm"
+                    <SliderField label={`${t.position} · ${t.axisX}`} value={sel.pos.x} min={-props.bed.x / 2} max={props.bed.x / 2} step={1} unit=" mm"
                       onChange={(x) => v.setPosition(sel.id, x, sel.pos.y)} />
-                    <SliderField label={`${t.position} · ${t.axisY}`} value={sel.pos.y} min={-BED / 2} max={BED / 2} step={1} unit=" mm"
+                    <SliderField label={`${t.position} · ${t.axisY}`} value={sel.pos.y} min={-props.bed.y / 2} max={props.bed.y / 2} step={1} unit=" mm"
                       onChange={(y) => v.setPosition(sel.id, sel.pos.x, y)} />
                   </GlassCard>
                 </>
