@@ -23,8 +23,9 @@ interface Entry {
 }
 
 const PALETTE = {
-  dark: { bg: 0x0e1012, bed: 0x171a1d, grid: 0x2a2f35, model: 0x4a90d9, bad: 0xe05260 },
-  light: { bg: 0xf6f7f9, bed: 0xe9edf2, grid: 0xb9c0ca, model: 0x2f6fbf, bad: 0xd23140 },
+  // Black-green brand palette. The canvas is transparent: the glass card behind it is the background.
+  dark: { bed: 0x0c1a12, grid: 0x1f4a30, model: 0x2bd47d, bad: 0xfb7185, edge: 0x22c55e },
+  light: { bed: 0xe3efe7, grid: 0x9fc9ae, model: 0x16a34a, bad: 0xe11d48, edge: 0x16a34a },
 };
 
 /** Owns the three.js scene. React drives it; it pushes ModelInfo[] back out. */
@@ -51,7 +52,8 @@ export class Viewer {
   ) {
     this.onChange = onChange;
     this.onCut = onCut;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
@@ -108,7 +110,7 @@ export class Viewer {
 
     const box = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.BoxGeometry(BED, BED, HEIGHT)),
-      new THREE.LineBasicMaterial({ color: p.grid, transparent: true, opacity: 0.35 }),
+      new THREE.LineBasicMaterial({ color: p.edge, transparent: true, opacity: 0.3 }),
     );
     box.position.set(0, 0, HEIGHT / 2);
     this.bedGroup.add(box);
@@ -124,7 +126,7 @@ export class Viewer {
 
   applyTheme(theme: Theme) {
     this.theme = theme;
-    this.scene.background = new THREE.Color(PALETTE[theme].bg);
+    this.scene.background = null;
     this.buildBed();
     this.refreshMaterials();
   }
@@ -329,8 +331,7 @@ export class Viewer {
   }
 
   fitView() {
-    // Always frame the whole bed plus any models, so the plate is visible and
-    // the content sits in the upper part of the screen (above the bottom sheet).
+    // Always frame the whole bed plus any models, so the plate stays visible.
     const box = new THREE.Box3(
       new THREE.Vector3(-HALF, -HALF, 0),
       new THREE.Vector3(HALF, HALF, 0),
@@ -338,10 +339,9 @@ export class Viewer {
     this.entries.forEach((e) => box.expandByObject(e.mesh));
     const center = box.getCenter(new THREE.Vector3());
     const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
-    // Aim a bit below the real centre so the model rises above the sheet.
-    this.controls.target.set(center.x, center.y, -radius * 0.25);
-    const dir = new THREE.Vector3(0.75, -1, 0.65).normalize();
-    this.camera.position.copy(this.controls.target).addScaledVector(dir, radius * 2.2);
+    this.controls.target.set(center.x, center.y, Math.max(center.z, 0));
+    const dir = new THREE.Vector3(0.75, -1, 0.75).normalize();
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, fitDistance(radius * 0.92, this.camera));
     this.controls.update();
   }
 
@@ -471,7 +471,7 @@ export class Viewer {
       const mat = e.mesh.material as THREE.MeshStandardMaterial;
       const bad = this.isOutOfBounds(e.mesh);
       mat.color.setHex(bad ? p.bad : p.model);
-      mat.emissive.setHex(e.id === this.selectedId ? 0x222a33 : 0x000000);
+      mat.emissive.setHex(e.id === this.selectedId ? 0x0e3d22 : 0x000000);
       mat.needsUpdate = true;
     }
   }
@@ -523,6 +523,7 @@ export class Viewer {
   }
 
   resize(w: number, h: number) {
+    if (w <= 0 || h <= 0) return; // hidden screen: keep the last size
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
@@ -543,3 +544,12 @@ export class Viewer {
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
+
+/** Camera distance that fits a sphere of [radius] in both the vertical and horizontal field of view. */
+export function fitDistance(radius: number, camera: THREE.PerspectiveCamera, margin = 1.08): number {
+  const v = THREE.MathUtils.degToRad(camera.fov);
+  const aspect = isFinite(camera.aspect) && camera.aspect > 0 ? camera.aspect : 1;
+  const h = 2 * Math.atan(Math.tan(v / 2) * aspect);
+  return (radius / Math.sin(Math.min(v, h) / 2)) * margin;
+}
+

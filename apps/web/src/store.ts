@@ -14,7 +14,10 @@ export interface ModelInfo {
 }
 
 export type Theme = "dark" | "light";
-export type GizmoMode = "translate" | "rotate" | "scale";
+/** The user's appearance choice: follow the phone, or always dark / light. */
+export type Look = "auto" | "dark" | "light";
+export type Screen = "home" | "editor" | "printer" | "more";
+export type EditorTab = "info" | "edit" | "cut" | "export";
 
 export interface CutUi {
   h: number;
@@ -24,36 +27,73 @@ export interface CutUi {
 
 interface AppState {
   models: ModelInfo[];
-  theme: Theme;
-  gizmo: GizmoMode;
+  look: Look;
+  theme: Theme; // resolved from look + system preference
+  screen: Screen;
+  editorTab: EditorTab;
   loading: boolean;
   error: string | null;
   cut: CutUi | null;
   setModels: (m: ModelInfo[]) => void;
-  setTheme: (t: Theme) => void;
-  setGizmo: (g: GizmoMode) => void;
+  setLook: (l: Look) => void;
+  setSystemDark: (dark: boolean) => void;
+  setScreen: (s: Screen) => void;
+  setEditorTab: (t: EditorTab) => void;
   setLoading: (b: boolean) => void;
   setError: (e: string | null) => void;
   setCut: (c: CutUi | null) => void;
 }
 
-const initialTheme: Theme =
-  typeof window !== "undefined" &&
-  window.matchMedia &&
-  window.matchMedia("(prefers-color-scheme: light)").matches
-    ? "light"
-    : "dark";
+const LOOK_KEY = "bcs.look";
 
-export const useStore = create<AppState>((set) => ({
+function readLook(): Look {
+  try {
+    const v = localStorage.getItem(LOOK_KEY);
+    if (v === "auto" || v === "dark" || v === "light") return v;
+  } catch {
+    /* storage unavailable: fall back to auto */
+  }
+  return "auto";
+}
+
+function systemDark(): boolean {
+  return !(
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: light)").matches
+  );
+}
+
+const resolve = (look: Look, sysDark: boolean): Theme =>
+  look === "auto" ? (sysDark ? "dark" : "light") : look;
+
+const initialLook = readLook();
+let sysDark = systemDark();
+
+export const useStore = create<AppState>((set, get) => ({
   models: [],
-  theme: initialTheme,
-  gizmo: "translate",
+  look: initialLook,
+  theme: resolve(initialLook, sysDark),
+  screen: "home",
+  editorTab: "info",
   loading: false,
   error: null,
   cut: null,
   setModels: (models) => set({ models }),
-  setTheme: (theme) => set({ theme }),
-  setGizmo: (gizmo) => set({ gizmo }),
+  setLook: (look) => {
+    try {
+      localStorage.setItem(LOOK_KEY, look);
+    } catch {
+      /* not persisted; still applied for this session */
+    }
+    set({ look, theme: resolve(look, sysDark) });
+  },
+  setSystemDark: (dark) => {
+    sysDark = dark;
+    set({ theme: resolve(get().look, dark) });
+  },
+  setScreen: (screen) => set({ screen }),
+  setEditorTab: (editorTab) => set({ editorTab }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   setCut: (cut) => set({ cut }),

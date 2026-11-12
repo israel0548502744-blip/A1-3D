@@ -1,17 +1,20 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { X, RefreshCw } from "lucide-react";
 import { t } from "./i18n";
+import { GlassCard, RoundButton, SliderField, Pills, PrimaryButton } from "./ui/kit";
 import type { SliceResult } from "./slicer/pipeline";
 import type { MachineSettings } from "./slicer/estimate";
 import type { LayerPaths } from "./slicer/toolpath";
+import { fitDistance } from "./three/viewer";
 
 const COL = {
-  outer: new THREE.Color(0x1fc45e),
-  inner: new THREE.Color(0x4a90d9),
-  infill: new THREE.Color(0xe8912f),
+  outer: new THREE.Color(0x22c55e),
+  inner: new THREE.Color(0x38bdf8),
+  infill: new THREE.Color(0xfbbf24),
 };
-const LEGEND = { outer: "#1fc45e", inner: "#4a90d9", infill: "#e8912f" };
+const LEGEND = { outer: "#22c55e", inner: "#38bdf8", infill: "#fbbf24" };
 
 function fmtTime(sec: number): string {
   const h = Math.floor(sec / 3600);
@@ -72,7 +75,8 @@ export function SlicePreview(props: {
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.localClippingEnabled = true;
@@ -80,8 +84,6 @@ export function SlicePreview(props: {
     rendererRef.current = renderer;
 
     const scene = new THREE.Scene();
-    const css = getComputedStyle(document.documentElement);
-    scene.background = new THREE.Color((css.getPropertyValue("--surface-2") || "#1e2225").trim());
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, mount.clientWidth / mount.clientHeight, 0.1, 5000);
@@ -150,7 +152,7 @@ export function SlicePreview(props: {
       const radius = bb.getBoundingSphere(new THREE.Sphere()).radius || 50;
       ud.controls.target.copy(center);
       const dir = new THREE.Vector3(0.8, -1, 0.7).normalize();
-      ud.camera.position.copy(center).addScaledVector(dir, radius * 2.4);
+      ud.camera.position.copy(center).addScaledVector(dir, fitDistance(radius, ud.camera, 1.12));
       ud.controls.update();
     }
   }, [result]);
@@ -168,17 +170,17 @@ export function SlicePreview(props: {
 
   return (
     <div className="overlay">
-      <div className="overlay-head">
-        <div>
-          <b>{t.slicePreview}</b> <span className="tag">{t.sliceExperimental}</span>
+      <div className="overlay-inner">
+        <div className="overlay-head">
+          <h2>
+            {t.slicePreview} <span className="tag">{t.sliceExperimental}</span>
+          </h2>
+          <RoundButton icon={X} label={t.close} onClick={props.onClose} />
         </div>
-        <button className="icon-btn" onClick={props.onClose} aria-label={t.close}>
-          ✕
-        </button>
-      </div>
 
-      <div className="overlay-body">
-        <div ref={mountRef} className="slice-canvas" />
+        <GlassCard className="slice-canvas">
+          <div ref={mountRef} style={{ position: "absolute", inset: 0 }} />
+        </GlassCard>
 
         <div className="legend">
           <span><i style={{ background: LEGEND.outer }} />{t.wallOuter}</span>
@@ -186,45 +188,33 @@ export function SlicePreview(props: {
           <span><i style={{ background: LEGEND.infill }} />{t.infillLegend}</span>
         </div>
 
-        <div className="field">
-          <div className="lbl">
-            <span>{t.layer}</span>
-            <b>{layer + 1} {t.ofLayers} {result.layers.length}</b>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={maxLayer}
+        <GlassCard className="panel">
+          <SliderField
+            label={`${t.layer} (${t.ofLayers} ${result.layers.length})`}
+            value={layer + 1}
+            min={1}
+            max={maxLayer + 1}
             step={1}
-            value={layer}
-            onChange={(ev) => setLayer(parseInt(ev.target.value))}
+            onChange={(n) => setLayer(n - 1)}
           />
-        </div>
-
-        <div className="grid2">
-          <Stat label={t.estTime} value={fmtTime(e.timeSec)} />
-          <Stat label={t.estWeight} value={`${e.grams.toFixed(1)} ${t.grams}`} />
-          <Stat label={t.estFilament} value={`${e.meters.toFixed(2)} ${t.meters}`} />
-          <Stat label={t.estCost} value={`₪ ${e.cost.toFixed(2)}`} />
-        </div>
-
-        <div className="section">
-          <h3>{t.sliceSettings}</h3>
-          <div className="field">
-            <div className="lbl"><span>{t.layerH}</span></div>
-            <div className="grid3">
-              {[0.12, 0.2, 0.28].map((lh) => (
-                <button
-                  key={lh}
-                  className={`btn ghost ${settings.layerHeight === lh ? "active" : ""}`}
-                  onClick={() => setSettings({ ...settings, layerHeight: lh, firstLayerHeight: lh })}
-                >
-                  {lh} mm
-                </button>
-              ))}
-            </div>
+          <div className="stat-grid">
+            <Stat label={t.estTime} value={fmtTime(e.timeSec)} />
+            <Stat label={t.estWeight} value={`${e.grams.toFixed(1)} ${t.grams}`} />
+            <Stat label={t.estFilament} value={`${e.meters.toFixed(2)} ${t.meters}`} />
+            <Stat label={t.estCost} value={`₪ ${e.cost.toFixed(2)}`} />
           </div>
-          <Slider
+        </GlassCard>
+
+        <GlassCard className="panel">
+          <h3 className="panel-title">{t.sliceSettings}</h3>
+          <div className="slider-head"><span>{t.layerH}</span></div>
+          <Pills<number>
+            value={settings.layerHeight}
+            onChange={(lh) => setSettings({ ...settings, layerHeight: lh, firstLayerHeight: lh })}
+            options={[0.12, 0.2, 0.28].map((lh) => ({ value: lh, label: `${lh} mm` }))}
+          />
+          <div style={{ height: 18 }} />
+          <SliderField
             label={t.infill}
             value={Math.round(settings.infillDensity * 100)}
             min={0}
@@ -233,7 +223,7 @@ export function SlicePreview(props: {
             unit="%"
             onChange={(v) => setSettings({ ...settings, infillDensity: v / 100 })}
           />
-          <Slider
+          <SliderField
             label={t.walls}
             value={settings.wallCount}
             min={1}
@@ -241,10 +231,10 @@ export function SlicePreview(props: {
             step={1}
             onChange={(v) => setSettings({ ...settings, wallCount: v })}
           />
-          <button className="btn block" disabled={props.busy} onClick={props.onUpdate}>
+          <PrimaryButton block icon={RefreshCw} disabled={props.busy} onClick={props.onUpdate}>
             {props.busy ? t.slicing : t.update}
-          </button>
-        </div>
+          </PrimaryButton>
+        </GlassCard>
 
         <p className="note">{t.sliceNote}</p>
       </div>
@@ -257,33 +247,6 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="stat">
       <span>{label}</span>
       <b>{value}</b>
-    </div>
-  );
-}
-
-function Slider(props: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="field">
-      <div className="lbl">
-        <span>{props.label}</span>
-        <b>{props.value}{props.unit ?? ""}</b>
-      </div>
-      <input
-        type="range"
-        min={props.min}
-        max={props.max}
-        step={props.step}
-        value={props.value}
-        onChange={(e) => props.onChange(parseFloat(e.target.value))}
-      />
     </div>
   );
 }
